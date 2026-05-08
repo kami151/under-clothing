@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=1440" />
+<title>under — second atmosphere</title>
+
+<style>
+  /* ── Geist Mono (SIL Open Font License, served locally) ────────────── */
+  @font-face {
+    font-family: "Geist Mono";
+    src: url("Geist_Mono/GeistMono-VariableFont_wght.ttf") format("truetype-variations"),
+         url("Geist_Mono/GeistMono-VariableFont_wght.ttf") format("truetype");
+    font-weight: 100 900;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  :root {
+    --pad: 16px;
+    --bg: #ffffff;
+    --ink: #0a0908;
+    --panel: #272727;
+    --panel-ink: #f4f1ec;
+    --panel-mute: rgba(244, 241, 236, 0.55);
+    --panel-warm: #c9b399;
+    --panel-divider: rgba(244, 241, 236, 0.18);
+    --hairline: rgba(39, 39, 39, 0.45);
+    --font:
+      "Geist Mono",
+      ui-monospace, "JetBrains Mono", "Menlo", "Consolas", monospace;
+
+    --right-w: 388px;
+    --left-w: 264px;
+
+    /* Shared text rhythm — every label/spec/button uses these. */
+    --text: 10px;
+    --tracking: 0.04em;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font);
+    font-weight: 400;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: geometricPrecision;
+  }
+
+  body {
+    min-height: 100vh;
+  }
+
+  /* ── Full-width stage. Internal sections are absolutely positioned
+        against the viewport edges (left:0 / right:0), so the right black
+        panel naturally docks to the viewport's right edge.                */
+  .stage {
+    position: relative;
+    width: 100%;
+    height: 100vh;
+    background: var(--bg);
+    overflow: hidden;
+
+    /* Hidden behind the loader until every asset reports ready */
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.7s ease;
+  }
+  .stage.is-ready {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* ── APP LOADER ──────────────────────────────────────────────────────
+        Full-bleed white screen with a centred LOADING label + progress bar.
+        Stays mounted until all assets (3D model + every video) report ready,
+        then fades out and reveals the stage in one beat.                    */
+  .app-loader {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: opacity 0.55s ease;
+  }
+  .app-loader.is-done {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .app-loader__label {
+    font-size: 10px;
+    line-height: 1;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    color: var(--ink);
+  }
+  .app-loader__bar {
+    width: 200px;
+    height: 20px;
+    border: 1px solid var(--ink);
+    padding: 3px;
+    background: transparent;
+  }
+  .app-loader__fill {
+    width: 0%;
+    height: 100%;
+    background: var(--ink);
+    transition: width 0.18s linear;
+  }
+
+  /* ── 3D model: bottom-most layer, full stage width, full viewport
+        height. Every other section sits on top of it via higher z-index.  */
+  .model-wrap {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+    background: var(--bg);
+    z-index: 0;
+    pointer-events: none;
+  }
+  .model {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    pointer-events: auto;
+  }
+
+  /* ── LEFT CONTENT COLUMN ─────────────────────────────────────────── */
+  /* The whole column is transparent to the mouse so the 3D model below
+     keeps tracking the cursor continuously. Only genuinely interactive
+     children (nav buttons, silhouette thumbnails) opt back in via the
+     rule below — text and decorative blocks must stay pass-through.    */
+  .left {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: var(--left-w);
+    height: 100%;
+    padding: var(--pad);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    z-index: 5;
+    pointer-events: none;
+  }
+  .nav__btn,
+  .thumb {
+    pointer-events: auto;
+  }
+
+  .brand {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 60px;
+    width: 100%;
+  }
+  .brand > div {
+    width: 100%;
+  }
+  .brand__logo {
+    display: block;
+    width: 112px;
+    height: auto;
+    user-select: none;
+  }
+  .brand__collection,
+  .brand__lookbook {
+    font-size: var(--text);
+    letter-spacing: var(--tracking);
+    text-transform: uppercase;
+    color: var(--ink);
+  }
+  .brand__collection {
+    line-height: 1.1;
+    width: 120px;
+    padding-top: 8px;
+  }
+  /* Vertical positioning is handled by align-self: flex-end (bottom of the
+     brand row), so no manual padding is needed here. */
+  .brand__lookbook {
+    line-height: 1;
+    align-self: flex-end;
+    text-align: right;
+    width: 100%;
+  }
+
+  /* ── Top group: brand row + description sit close to the top edge ── */
+  .left__top {
+    display: flex;
+    flex-direction: column;
+    gap: 56px;
+    width: 340px;
+  }
+
+  /* ── Bottom group: silhouette block + nav anchored to the bottom ─── */
+  .left__bottom {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 340px;
+  }
+
+  /* ── SILHOUETTE THUMBNAIL GRID ───────────────────────────────────── */
+  .silhouette {
+    width: 340px;
+  }
+  .silhouette__head {
+    display: flex;
+    justify-content: space-between;
+    font-size: var(--text);
+    line-height: 1;
+    letter-spacing: var(--tracking);
+    text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+  /* 340 wide container: 80px col + 180px gap + 80px col = 340. */
+  .thumbs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    row-gap: 8px;
+    column-gap: 180px;
+  }
+  .thumb {
+    position: relative;
+    aspect-ratio: 80 / 126;
+    overflow: hidden;
+    background: #f3f1ee;
+  }
+  .thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    user-select: none;
+    -webkit-user-drag: none;
+  }
+
+  /* ── DESCRIPTION + NAV ───────────────────────────────────────────── */
+  .description {
+    font-size: var(--text);
+    line-height: 1.1;
+    letter-spacing: var(--tracking);
+    text-transform: uppercase;
+    color: var(--ink);
+    width: 340px;
+  }
+  .nav {
+    display: flex;
+    gap: 8px;
+    width: 340px;
+    color: #ffffff;
+  }
+  .nav__btn {
+    appearance: none;
+    background: var(--panel);
+    border: 1px solid var(--hairline);
+    color: #ffffff;
+    font-family: inherit;
+    font-size: var(--text);
+    line-height: 1;
+    letter-spacing: var(--tracking);
+    text-transform: uppercase;
+    width: 100%;
+    padding: 8px 16px;
+    cursor: pointer;
+    transition: background 0.25s ease, color 0.25s ease;
+  }
+  .nav__btn:hover {
+    background: var(--ink);
+    color: var(--bg);
+  }
+
+  /* ── RIGHT BLACK PANEL ───────────────────────────────────────────── */
+  .right {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: var(--right-w);
+    height: 100%;
+    padding: var(--pad);
+    background: var(--panel);
+    color: var(--panel-ink);
+    display: flex;
+    flex-direction: column;
+    z-index: 10;
+  }
+
+  .hero {
+    width: 100%;
+    aspect-ratio: 4 / 5.6;
+    overflow: hidden;
+    background: #111;
+  }
+  .hero video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    padding: 16px 0 8px;
+    font-size: var(--text);
+    line-height: 1;
+    letter-spacing: var(--tracking);
+    text-transform: uppercase;
+  }
+  .meta__group { line-height: 1.1; }
+  .meta__group--right { text-align: right; }
+  .meta__title,
+  .meta__sub  { color: var(--panel-ink); }
+
+  .specs {
+    margin-top: 12px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    row-gap: 2px;
+    column-gap: 8px;
+    font-size: var(--text);
+    line-height: 1;
+    letter-spacing: var(--tracking);
+    text-transform: uppercase;
+  }
+  .specs dt,
+  .specs dd { color: var(--panel-ink); }
+  .specs dd {
+    text-align: right;
+    font-weight: 400;
+  }
+
+  .credit {
+    margin-top: auto;
+    text-align: right;
+    font-size: var(--text);
+    letter-spacing: var(--tracking);
+    text-transform: uppercase;
+    color: var(--panel-ink);
+    line-height: 1.1;
+  }
+
+  /* Hide native scrollbars in case of overflow */
+  body::-webkit-scrollbar { display: none; }
+</style>
+</head>
+<body>
+
+<div class="app-loader" id="appLoader" role="status" aria-live="polite">
+  <span class="app-loader__label">Loading</span>
+  <div class="app-loader__bar">
+    <div class="app-loader__fill" id="appLoaderFill"></div>
+  </div>
+</div>
+
+<main class="stage">
+  <!-- 3D fashion model: full functionality (turntable, hover-zoom, custom cursor) -->
+  <div class="model-wrap">
+    <iframe
+      class="model"
+      src="fashion_model_3d (11).html"
+      title="3D fashion model"
+      loading="eager"
+      allow="autoplay"
+      width="100%"
+      height="100%"
+      frameborder="0"
+      scrolling="no"
+    ></iframe>
+  </div>
+
+  <!-- LEFT: brand + lookbook + description (top), silhouette + nav (bottom) -->
+  <section class="left">
+    <div class="left__top">
+      <header class="brand">
+        <div>
+          <img class="brand__logo" src="logo.png" alt="under" />
+          <p class="brand__collection">
+            Second atmosphere<br />Collection
+          </p>
+        </div>
+        <p class="brand__lookbook">Lookbook</p>
+      </header>
+
+      <p class="description">
+        Second atmosphere was built around a single question: what does it feel
+        like to be surrounded by something that moves with you rather than on
+        you? Every piece in this collection sits slightly away from the body —
+        not loose, not oversized, but hovering, as if the garment and the
+        person inside it have reached a quiet agreement about space, about
+        proximity, about the difference between being held and being
+        contained.
+      </p>
+    </div>
+
+    <div class="left__bottom">
+      <div class="silhouette">
+        <div class="silhouette__head">
+          <span>Silhouette</span>
+          <span>02</span>
+        </div>
+        <div class="thumbs">
+          <div class="thumb"><img src="Hi3D-2026-04-24.png" alt="" /></div>
+          <div class="thumb"><img src="Hi3D-2026-04-24 (1).png" alt="" /></div>
+          <div class="thumb"><img src="Hi3D-2026-04-24 (2).png" alt="" /></div>
+          <div class="thumb"><img src="Hi3D-2026-04-24 (3).png" alt="" /></div>
+        </div>
+      </div>
+
+      <div class="nav">
+        <button class="nav__btn" type="button">← Previous</button>
+        <button class="nav__btn" type="button">Next →</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- RIGHT: black info panel -->
+  <aside class="right">
+    <div class="hero">
+      <video src="Turntable_Rotation (3).mp4" muted loop autoplay playsinline></video>
+    </div>
+
+    <div class="meta">
+      <div class="meta__group">
+        <div class="meta__title">Second atmosphere</div>
+        <div class="meta__title">Collection</div>
+      </div>
+      <div class="meta__group meta__group--right">
+        <div class="meta__title">Silhouette</div>
+        <div class="meta__sub">00</div>
+      </div>
+    </div>
+
+    <dl class="specs">
+      <dt>Type</dt>      <dd>Double-stitched seams</dd>
+      <dt>Material</dt>  <dd>Lightweight (128 gsm)</dd>
+      <dt>Color</dt>     <dd>Silver/Gray/Steel</dd>
+      <dt>Lenght</dt>    <dd>170 cm</dd>
+      <dt>Sizing</dt>    <dd>Oversize + tight</dd>
+      <dt>Finish</dt>    <dd>Soft touch</dd>
+    </dl>
+
+    <p class="credit">
+      Collection designed<br />by Ochenkovska
+    </p>
+  </aside>
+</main>
+
+<script>
+  /* ── App loader ──────────────────────────────────────────────────────
+     Progress is the weighted sum of independent asset milestones:
+       70% — 3D model parsed and added to the scene (postMessage from iframe)
+       10% — hero video can play through
+       20% — four silhouette thumbnail images ready (5% each)
+
+     A small startup creep keeps the bar visibly moving in the first second
+     so the user never sees a frozen 0%. The visual fill lerps toward the
+     real target at a constant rate, which smooths discrete milestones into
+     a continuous animation. Only when target hits 1.0 AND the visible fill
+     catches up, the loader fades and the stage is revealed.               */
+  (() => {
+    const loaderEl = document.getElementById("appLoader");
+    const fillEl   = document.getElementById("appLoaderFill");
+    const stageEl  = document.querySelector(".stage");
+
+    const WEIGHTS = { model: 0.70, hero: 0.10, thumb: 0.05 };
+    const SAFETY_TIMEOUT_MS = 15000;
+
+    let target   = 0;
+    let progress = 0;
+    let revealed = false;
+
+    const bump = (amount) => { target = Math.min(1, target + amount); };
+
+    /* Initial creep: fake a small amount of forward motion during the first
+       second so 0% never sits still while everything is still booting. */
+    let creep = 0;
+    const creepTimer = setInterval(() => {
+      creep = Math.min(0.08, creep + 0.008);
+    }, 80);
+    setTimeout(() => clearInterval(creepTimer), 1200);
+
+    /* 3D model — iframe posts a message once the GLB is parsed and the
+       silhouette is in the scene graph. */
+    window.addEventListener("message", (e) => {
+      if (e?.data?.type === "under:model-ready") bump(WEIGHTS.model);
+    });
+
+    /* Hero video on the right panel */
+    const hero = document.querySelector(".hero video");
+    if (hero) {
+      const onHero = () => bump(WEIGHTS.hero);
+      if (hero.readyState >= 4) onHero();
+      else hero.addEventListener("canplaythrough", onHero, { once: true });
+    }
+
+    /* Four silhouette thumbnails (still images) */
+    document.querySelectorAll(".thumb img").forEach((img) => {
+      const onReady = () => bump(WEIGHTS.thumb);
+      if (img.complete && img.naturalWidth > 0) onReady();
+      else {
+        img.addEventListener("load",  onReady, { once: true });
+        img.addEventListener("error", onReady, { once: true });
+      }
+    });
+
+    /* Safety net: never trap the user behind a stuck loader. */
+    setTimeout(() => { target = 1; }, SAFETY_TIMEOUT_MS);
+
+    /* Render loop: lerp `progress` toward `max(target, creep)`. */
+    const tick = () => {
+      const t = Math.max(target, creep);
+      progress += (t - progress) * 0.06;
+
+      const pct = Math.min(1, progress) * 100;
+      fillEl.style.width = pct.toFixed(2) + "%";
+
+      const finished = target >= 1 && t - progress < 0.005;
+      if (!finished) {
+        requestAnimationFrame(tick);
+        return;
+      }
+      if (revealed) return;
+      revealed = true;
+      fillEl.style.width = "100%";
+      /* Reveal stage and dismiss loader together for a single in-beat. */
+      requestAnimationFrame(() => {
+        stageEl.classList.add("is-ready");
+        setTimeout(() => loaderEl.classList.add("is-done"), 60);
+      });
+    };
+    requestAnimationFrame(tick);
+  })();
+
+  /* ── Cursor relay ────────────────────────────────────────────────────
+     The 3D iframe renders its own custom cursor and updates it from its
+     own document's mousemove. Whenever the mouse passes over a parent
+     overlay that captures pointer events (nav buttons, silhouette
+     thumbnails) the iframe stops receiving events and the cursor would
+     freeze, then jump on exit. Forwarding the parent-side position via
+     postMessage keeps the trail continuous across the whole stage.     */
+  (() => {
+    const frame = document.querySelector(".model");
+    if (!frame) return;
+
+    const post = (data) => {
+      frame.contentWindow?.postMessage(data, "*");
+    };
+
+    let pendingX = 0;
+    let pendingY = 0;
+    let scheduled = false;
+
+    const flush = () => {
+      scheduled = false;
+      post({ type: "under:cursor", x: pendingX, y: pendingY });
+    };
+
+    window.addEventListener(
+      "mousemove",
+      (e) => {
+        pendingX = e.clientX;
+        pendingY = e.clientY;
+        if (scheduled) return;
+        scheduled = true;
+        requestAnimationFrame(flush);
+      },
+      { passive: true }
+    );
+
+    /* Only fire when the pointer truly leaves the viewport, not when it
+       crosses internal element boundaries — `relatedTarget` is null only
+       on a real document-level leave. */
+    document.addEventListener("mouseleave", (e) => {
+      if (e.relatedTarget) return;
+      post({ type: "under:cursor-leave" });
+    });
+  })();
+</script>
+</body>
+</html>
